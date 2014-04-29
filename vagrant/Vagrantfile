@@ -19,34 +19,31 @@
 Vagrant.require_version ">= 1.5.0"
 VAGRANTFILE_API_VERSION = "2"
 
-VAGRANT_BOX = "ubuntu/trusty32" # https://vagrantcloud.com/ubuntu/trusty32
-#VAGRANT_BOX = "ubuntu/trusty64" # https://vagrantcloud.com/ubuntu/trusty64
-CODE_FOLDER = "/opt/code/vagrant-puppet-demo"
+# use 32-bit if your host machine is 32-bit
+#VAGRANT_BOX = "ubuntu/trusty32" # https://vagrantcloud.com/ubuntu/trusty32
+VAGRANT_BOX = "ubuntu/trusty64" # https://vagrantcloud.com/ubuntu/trusty64
+
+# set this to the directory where you cloned this Git repo
+CODE_FOLDER = "~/code/other/bsu/vagrant-puppet-demo"
 
 nodes = [
-  { :hostname => "appserver1", :ip => "192.168.0.41", :role => "appserver", :provider => "virtualbox" },
-  { :hostname => "appserver2", :ip => "192.168.0.42", :role => "appserver", :provider => "virtualbox" },
-  { :hostname => "appserver3", :ip => "192.168.0.43", :role => "appserver", :provider => "aws" },
-  { :hostname => "appserver4", :ip => "192.168.0.44", :role => "appserver", :provider => "aws" },
+  { :hostname => "appserver1", :ip => "192.168.0.41", :provider => "virtualbox" },
+  { :hostname => "appserver2", :ip => "192.168.0.42", :provider => "virtualbox" },
+  { :hostname => "appserver3", :ip => "192.168.0.43", :provider => "aws" },
+  { :hostname => "appserver4", :ip => "192.168.0.44", :provider => "aws" },
 ]
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   nodes.each do |node|
     config.vm.define node[:hostname] do |node_config|
+      node_config.vm.synced_folder CODE_FOLDER, "/home/vagrant/code"
+
+      # specific configuration for the VirtualBox provider
       if node[:provider] == "virtualbox"
         node_config.vm.box = VAGRANT_BOX
         node_config.vm.hostname = node[:hostname] + ".box"
         node_config.vm.network :private_network, ip: node[:ip]
-        $ssh_username = "vagrant"
-      elsif node[:provider] == "aws"
-        node_config.vm.box = "dummy"
-        $ssh_username = "ubuntu"
-        #node_config.ssh.username = "vagrant"
-      end
 
-      node_config.vm.synced_folder CODE_FOLDER, "/home/vagrant/code"
-
-      if node[:provider] == "virtualbox"
         node_config.vm.provider :virtualbox do |vb|
           vb.name = node[:hostname]
           vb.memory = node[:ram] ? node[:ram] : 512
@@ -54,7 +51,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         end
       end
 
+      # specific configuration for the AWS provider
       if node[:provider] == "aws"
+        node_config.vm.box = "dummy"
+
         config.vm.provider :aws do |aws, override|
           aws.keypair_name = "vagrant-aws"
           override.ssh.private_key_path = "~/.ssh/vagrant-aws.pem"
@@ -62,14 +62,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
           aws.security_groups = "vagrant"
           aws.region = "us-west-2"
           aws.ami = "ami-6ac2a85a"
-          override.ssh.username = $ssh_username
+          override.ssh.username = "ubuntu"
           aws.tags = {
             "Name" => node[:hostname],
           }
         end
       end
 
-      # update package lists and install Puppet prior to running Puppet
+      # update package lists and install Puppet prior to running it
       config.vm.provision :shell, :path => "bootstrap.sh"
 
       # provision the VM using Puppet
@@ -79,9 +79,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         puppet.module_path = "puppet/modules"
         puppet.facter = {
           "fqdn"         => node[:hostname],
-          "instancerole" => node[:role],
-          "ip_appserver" => node[:ip],
-          "ssh_username" => $ssh_username
+          "instancerole" => "appserver",
+          "ssh_username" => node[:provider] == "aws" ? "ubuntu" : "vagrant",
         }
       end
     end
