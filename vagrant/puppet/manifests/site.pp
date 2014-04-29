@@ -7,7 +7,7 @@ stage { 'pre': before => Stage['main'] }
 
 class { 'baseconfig':
   stage => 'pre',
-  user  => 'vagrant'
+  user  => $::ssh_username
 }
 
 File {
