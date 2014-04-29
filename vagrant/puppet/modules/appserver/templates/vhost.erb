@@ -1,0 +1,16 @@
+<VirtualHost *:80>
+  ServerName <%= @name %>
+  ServerAdmin webmaster@localhost
+
+  DocumentRoot /var/www/<%= @name %>/public_html
+  <Directory /var/www/<%= @name %>/public_html>
+    Order Allow,Deny
+    Allow from all
+    Options Indexes FollowSymLinks
+    AllowOverride All
+  </Directory>
+
+  LogLevel warn
+  CustomLog ${APACHE_LOG_DIR}/access.log common
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+</VirtualHost>

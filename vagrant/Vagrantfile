@@ -1,0 +1,47 @@
+#
+# Vagrant configuration for a demo of Vagrant and Puppet with VirtualBox and AWS
+#
+# requires VirtualBox 4.2+ and Vagrant 1.5.0+
+Vagrant.require_version ">= 1.5.0"
+VAGRANTFILE_API_VERSION = "2"
+
+VAGRANT_BOX = "ubuntu/trusty32" # https://vagrantcloud.com/ubuntu/trusty32
+#VAGRANT_BOX = "ubuntu/trusty64" # https://vagrantcloud.com/ubuntu/trusty64
+CODE_FOLDER = "/opt/code/vagrant-puppet-demo"
+
+nodes = [
+  { :hostname => "appserver1", :ip => "192.168.0.41", :role => "appserver" },
+  { :hostname => "appserver2", :ip => "192.168.0.42", :role => "appserver" },
+]
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  nodes.each do |node|
+    config.vm.define node[:hostname] do |node_config|
+      node_config.vm.box = VAGRANT_BOX
+      node_config.vm.hostname = node[:hostname] + ".box"
+      node_config.vm.network :private_network, ip: node[:ip]
+      node_config.vm.synced_folder CODE_FOLDER, "/home/vagrant/code"
+
+      node_config.vm.provider :virtualbox do |vb|
+        vb.name = node[:hostname]
+        vb.memory = node[:ram] ? node[:ram] : 512
+        vb.cpus = node[:cpus] ? node[:cpus] : 1
+      end
+
+      # update package lists prior to running Puppet
+      node_config.vm.provision :shell, :inline => "/usr/bin/apt-get update"
+
+      # provision the VM using Puppet
+      node_config.vm.provision :puppet do |puppet|
+        puppet.manifests_path = "puppet/manifests"
+        puppet.manifest_file = "site.pp"
+        puppet.module_path = "puppet/modules"
+        puppet.facter = {
+          "fqdn"         => node[:hostname],
+          "instancerole" => node[:role],
+          "ip_appserver" => node[:ip]
+        }
+      end
+    end
+  end
+end
